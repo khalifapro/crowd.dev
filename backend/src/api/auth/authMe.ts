@@ -38,5 +38,8 @@ export default async (req, res) => {
     }),
   )
 
+  const ip = req.headers['x-forwarded-for']
+  req.log.info('authMe client ip', ip)
+
   await req.responseHandler.success(req, res, payload)
 }
