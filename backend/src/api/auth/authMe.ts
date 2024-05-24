@@ -38,7 +38,7 @@ export default async (req, res) => {
     }),
   )
 
-  req.log.info('authMe req headers', JSON.stringify(req.headers))
+  req.log.info('authMe req headers', req.headers)
   const ip = req.headers['x-forwarded-for']
   req.log.info('authMe client ip', ip)
 
