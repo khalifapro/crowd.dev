@@ -47,7 +47,7 @@
     "script:merge-similar-organizations": "SERVICE=script TS_NODE_TRANSPILE_ONLY=true tsx src/bin/scripts/merge-similar-organizations.ts",
     "script:cache-dashboard": "SERVICE=script TS_NODE_TRANSPILE_ONLY=true tsx src/bin/scripts/cache-dashboard.ts",
     "script:purge-tenants-and-data": "SERVICE=script TS_NODE_TRANSPILE_ONLY=true tsx src/bin/scripts/purge-tenants-and-data.ts",
-    "script:check-activities-with-wrong-member": "SERVICE=script TS_NODE_TRANSPILE_ONLY=true node -r tsconfig-paths/register -r ts-node/register src/bin/scripts/check-activities-with-wrong-member.ts"
+    "script:check-activities-with-wrong-member": "SERVICE=script TS_NODE_TRANSPILE_ONLY=true tsx src/bin/scripts/check-activities-with-wrong-member.ts"
   },
   "dependencies": {
     "@aws-sdk/client-comprehend": "^3.159.0",
