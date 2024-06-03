@@ -66,7 +66,7 @@ async function getActivitiesWithUsername(
         from activities
         where "memberId" = :memberId
         and username = :username
-        and platform = :platform;
+        and platform = :platform
         limit :limit offset :offset;
         `,
     {
@@ -162,25 +162,25 @@ if (parameters.help || !parameters.memberId || !parameters.platform || !paramete
 
     log.info(`Total ${totalActivities} activities found!`)
 
-    const memberIdentityInfo = await getMemberIdentity(seq, username, platform)
+    // const memberIdentityInfo = await getMemberIdentity(seq, username, platform)
 
-    let activities = await getActivitiesWithUsername(seq, memberId, platform, username, { offset, limit: BATCH_SIZE })
+    // let activities = await getActivitiesWithUsername(seq, memberId, platform, username, { offset, limit: BATCH_SIZE })
 
-    while (activities.length > 0) {
-      for (const activity of activities) {
-        if (activity.memberId !== memberIdentityInfo.memberId) {
-          await updateActivity(seq, activity.id, memberIdentityInfo.memberId, username, platform)
-          processed++
-        }
+    // while (activities.length > 0) {
+    //   for (const activity of activities) {
+    //     if (activity.memberId !== memberIdentityInfo.memberId) {
+    //       await updateActivity(seq, activity.id, memberIdentityInfo.memberId, username, platform)
+    //       processed++
+    //     }
 
-        log.info(`Processed ${processed}/${totalActivities} activities!`)
-      }
+    //     log.info(`Processed ${processed}/${totalActivities} activities!`)
+    //   }
 
-      offset += BATCH_SIZE
-      activities = await getActivitiesWithUsername(seq, memberId, platform, username, { offset, limit: BATCH_SIZE })
-    }
+    //   offset += BATCH_SIZE
+    //   activities = await getActivitiesWithUsername(seq, memberId, platform, username, { offset, limit: BATCH_SIZE })
+    // }
 
-    log.info('Finished processing activities!')
+    // log.info('Finished processing activities!')
 
     process.exit(0)
   })
