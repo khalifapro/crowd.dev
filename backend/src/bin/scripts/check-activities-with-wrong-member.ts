@@ -14,7 +14,7 @@ async function getActivities(
 ): Promise<any[]> {
   const results = await seq.query(
     `
-        select distinct on ("memberId") "memberId", username, platform
+        select id, "memberId", username, platform
         from activities
         where "tenantId" = :tenantId
         limit :limit offset :offset;
@@ -31,7 +31,7 @@ async function getActivities(
 async function getTotalActivities(seq: Sequelize, tenantId: string): Promise<number> {
     const results = await seq.query(
         `
-            select count(distinct "memberId") from activities
+            select count(*) from activities
             where "tenantId" = :tenantId;
             `,
         {
@@ -81,7 +81,7 @@ setImmediate(async () => {
 
   let offset = 0
   let processed = 0
-  const wronglyMappedMembers = []
+  const wronglyMappedIds = []
   const BATCH_SIZE = 100
 
   const totalActivities = await getTotalActivities(seq, tenantId)
@@ -89,17 +89,11 @@ setImmediate(async () => {
 
   while (activities.length > 0) {
     for (const activity of activities) {
-      const { memberId: activityMemberId, username, platform } = activity
+      const { id, memberId: activityMemberId, username, platform } = activity
       const identity = await getMemberIdentity(seq, username, platform)
 
       if (identity.length > 0 && activityMemberId !== identity[0].memberId) {
-        wronglyMappedMembers.push({
-          activityMemberId,
-          correctId: identity[0].memberId,
-          wrongId: activityMemberId,
-          username,
-          platform,
-        })
+        wronglyMappedIds.push(id) // wrongly mapped activity is stored in the array
       }
       
       processed += 1
@@ -111,8 +105,8 @@ setImmediate(async () => {
     activities = await getActivities(seq, tenantId, { offset, limit: BATCH_SIZE })
   }
 
-  log.info('Total wrongly mapped members in activities: ', wronglyMappedMembers.length)
-  log.info('Wrongly mapped members in activities: ', wronglyMappedMembers)
+  log.info('Total wrongly mapped members in activities: ', wronglyMappedIds.length)
+  log.info('Wrongly mapped activities: ', wronglyMappedIds)
 
   process.exit(0)
 })
