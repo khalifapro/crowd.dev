@@ -1,6 +1,6 @@
 import { QueryTypes, Sequelize } from 'sequelize'
 import { getServiceLogger } from '@crowd/logging'
-import SequelizeRepository from '../../database/repositories/sequelizeRepository'
+import { databaseInit } from '@/database/databaseConnection'
 
 /* eslint-disable no-continue */
 /* eslint-disable @typescript-eslint/no-loop-func */
@@ -73,9 +73,9 @@ if (processArguments.length !== 1) {
 const tenantId = processArguments[0]
 
 setImmediate(async () => {
-  const dbOptions = await SequelizeRepository.getDefaultIRepositoryOptions()
+  const dbOptions = await databaseInit(1000 * 60 * 15)
 
-  const seq = SequelizeRepository.getSequelize(dbOptions)
+  const seq = dbOptions.sequelize as Sequelize
 
   log.info('Querying database for wrongly mapped members in activities!')
 
@@ -84,7 +84,7 @@ setImmediate(async () => {
   const wronglyMappedMembers = []
   const BATCH_SIZE = 100
 
-  const totalActivities = await getTotalActivities(seq, tenantId)
+  const totalActivities = await getTotalActivities(dbOptions.seq, tenantId)
   let activities = await getActivities(seq, tenantId, { offset, limit: BATCH_SIZE })
 
   while (activities.length > 0) {
