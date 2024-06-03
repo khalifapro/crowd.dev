@@ -84,7 +84,7 @@ setImmediate(async () => {
   const wronglyMappedMembers = []
   const BATCH_SIZE = 100
 
-  const totalActivities = await getTotalActivities(dbOptions.seq, tenantId)
+  const totalActivities = await getTotalActivities(seq, tenantId)
   let activities = await getActivities(seq, tenantId, { offset, limit: BATCH_SIZE })
 
   while (activities.length > 0) {
