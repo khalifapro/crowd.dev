@@ -19,3 +19,8 @@ export interface IDissectMemberArgs {
   startDate?: string
   endDate?: string
 }
+
+export interface IFixVerifiedIdentitiesArgs {
+  tenantId: string
+  afterId?: string
+}

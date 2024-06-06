@@ -12,3 +12,7 @@ export interface IFindMemberMergeActionReplacement {
   endDate?: string
   userId?: string
 }
+
+export interface IMemberId {
+  memberId: string
+}

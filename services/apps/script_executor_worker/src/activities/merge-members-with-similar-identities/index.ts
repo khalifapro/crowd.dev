@@ -1,6 +1,9 @@
 import { svc } from '../../main'
 import MemberRepository from '@crowd/data-access-layer/src/old/apps/script_executor_worker/member.repo'
-import { ISimilarMember } from '@crowd/data-access-layer/src/old/apps/script_executor_worker/types'
+import {
+  IMemberId,
+  ISimilarMember,
+} from '@crowd/data-access-layer/src/old/apps/script_executor_worker/types'
 export async function findMembersWithSameVerifiedEmailsInDifferentPlatforms(
   tenantId: string,
   limit: number,
@@ -37,6 +40,27 @@ export async function findMembersWithSamePlatformIdentitiesDifferentCapitalizati
       platform,
       limit,
       afterHash,
+    )
+  } catch (err) {
+    throw new Error(err)
+  }
+
+  return rows
+}
+
+export async function findMembersWithIntegrationOrEnrichmentIdentities(
+  tenantId: string,
+  limit: number,
+  afterId?: string,
+): Promise<string[]> {
+  let rows: string[] = []
+
+  try {
+    const memberRepo = new MemberRepository(svc.postgres.reader.connection(), svc.log)
+    rows = await memberRepo.findMembersWithIntegrationOrEnrichmentIdentities(
+      tenantId,
+      limit,
+      afterId,
     )
   } catch (err) {
     throw new Error(err)

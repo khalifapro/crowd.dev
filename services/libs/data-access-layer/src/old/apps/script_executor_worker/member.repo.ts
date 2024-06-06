@@ -1,6 +1,6 @@
 import { DbConnection, DbTransaction } from '@crowd/database'
 import { Logger } from '@crowd/logging'
-import { ISimilarMember } from './types'
+import { IMemberId, ISimilarMember } from './types'
 
 class MemberRepository {
   constructor(
@@ -104,6 +104,36 @@ class MemberRepository {
     }
 
     return rows
+  }
+
+  async findMembersWithIntegrationOrEnrichmentIdentities(
+    tenantId: string,
+    limit = 50,
+    afterId: string = undefined,
+  ): Promise<string[]> {
+    let rows: IMemberId[] = []
+    try {
+      const afterIdFilter = afterId ? ` and "memberId" < $(afterId) ` : ''
+      rows = await this.connection.query(
+        `
+        select "memberId" from "memberIdentities"
+        where platform = 'integration_or_enrichment'
+        ${afterIdFilter}
+        order by "memberId" desc
+        limit $(limit);`,
+        {
+          tenantId,
+          afterId,
+          limit,
+        },
+      )
+    } catch (err) {
+      this.log.error('Error while finding members!', err)
+
+      throw new Error(err)
+    }
+
+    return rows.map((row) => row.memberId)
   }
 }
 

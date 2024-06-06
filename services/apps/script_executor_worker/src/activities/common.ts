@@ -1,6 +1,7 @@
 import { IMemberUnmergeBackup, IUnmergeBackup } from '@crowd/types'
 import axios from 'axios'
 import { svc } from '../main'
+import { SearchSyncApiClient } from '@crowd/opensearch'
 
 export async function mergeMembers(
   primaryMemberId: string,
@@ -69,4 +70,12 @@ export function timeout(ms: number, workflowId: string): Promise<void> {
       reject(new Error(`Timeout waiting for workflow ${workflowId} to finish`))
     }, ms)
   })
+}
+
+export async function syncMember(memberId: string): Promise<void> {
+  const syncApi = new SearchSyncApiClient({
+    baseUrl: process.env['CROWD_SEARCH_SYNC_API_URL'],
+  })
+
+  await syncApi.triggerMemberSync(memberId)
 }
