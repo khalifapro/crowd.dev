@@ -21,6 +21,5 @@ export interface IDissectMemberArgs {
 }
 
 export interface IFixVerifiedIdentitiesArgs {
-  tenantId: string
   afterId?: string
 }

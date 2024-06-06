@@ -49,7 +49,6 @@ export async function findMembersWithSamePlatformIdentitiesDifferentCapitalizati
 }
 
 export async function findMembersWithIntegrationOrEnrichmentIdentities(
-  tenantId: string,
   limit: number,
   afterId?: string,
 ): Promise<string[]> {
@@ -57,11 +56,7 @@ export async function findMembersWithIntegrationOrEnrichmentIdentities(
 
   try {
     const memberRepo = new MemberRepository(svc.postgres.reader.connection(), svc.log)
-    rows = await memberRepo.findMembersWithIntegrationOrEnrichmentIdentities(
-      tenantId,
-      limit,
-      afterId,
-    )
+    rows = await memberRepo.findMembersWithIntegrationOrEnrichmentIdentities(limit, afterId)
   } catch (err) {
     throw new Error(err)
   }

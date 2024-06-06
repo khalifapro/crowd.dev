@@ -107,7 +107,6 @@ class MemberRepository {
   }
 
   async findMembersWithIntegrationOrEnrichmentIdentities(
-    tenantId: string,
     limit = 50,
     afterId: string = undefined,
   ): Promise<string[]> {
@@ -122,7 +121,6 @@ class MemberRepository {
         order by "memberId" desc
         limit $(limit);`,
         {
-          tenantId,
           afterId,
           limit,
         },

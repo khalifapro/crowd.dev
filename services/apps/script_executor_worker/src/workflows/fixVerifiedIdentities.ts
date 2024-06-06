@@ -19,7 +19,6 @@ export async function fixVerifiedIdentities(args: IFixVerifiedIdentitiesArgs): P
   const PROCESS_MEMBERS_PER_RUN = 1000
 
   const memberIdsToBeSyncedAgain = await activity.findMembersWithIntegrationOrEnrichmentIdentities(
-    args.tenantId,
     PROCESS_MEMBERS_PER_RUN,
     args.afterId || undefined,
   )
@@ -35,7 +34,6 @@ export async function fixVerifiedIdentities(args: IFixVerifiedIdentitiesArgs): P
   }
 
   await continueAsNew<typeof fixVerifiedIdentities>({
-    tenantId: args.tenantId,
     afterId: memberIdsToBeSyncedAgain[memberIdsToBeSyncedAgain.length - 1],
   })
 }
