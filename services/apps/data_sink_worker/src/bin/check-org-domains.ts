@@ -67,7 +67,7 @@ setImmediate(async () => {
   console.log('organizationId\tplatform\ttype\tverified\tvalue')
   while (results.length > 0) {
     for (const result of results) {
-      let newValue: string = result.value
+      let newValue = result.value
       if (newValue !== result.value.trim()) {
         console.log('[trimming]\n', toText(result))
         newValue = result.value.trim()
