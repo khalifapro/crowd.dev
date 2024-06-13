@@ -2,11 +2,26 @@ import { DbTransaction, getDbConnection } from '@crowd/data-access-layer/src/dat
 import { DB_CONFIG } from '../conf'
 import { websiteNormalizer } from '@crowd/common'
 import { promises as fs } from 'fs'
+import { OrganizationIdentityType } from '@crowd/types'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 function toText(record: any): string {
   return `${record.organizationId},${record.platform},${record.type},${record.verified},"${record.value}"`
+}
+
+async function findIdentities(conn: DbTransaction, organizationId: string): Promise<any[]> {
+  const results = await conn.any(
+    `
+    select * from "organizationIdentities"
+    where "organizationId" = $(organizationId)
+    `,
+    {
+      organizationId,
+    },
+  )
+
+  return results
 }
 
 async function findExisting(conn: DbTransaction, record: any, newValue: string): Promise<any[]> {
@@ -144,6 +159,7 @@ setImmediate(async () => {
   while (results.length > 0) {
     for (const result of results) {
       let newValue = result.value
+      let invalid = false
 
       if (newValue !== result.value.trim()) {
         console.log('[trimming]\n', toText(result))
@@ -157,14 +173,37 @@ setImmediate(async () => {
       const normalized = websiteNormalizer(newValue, false)
       if (normalized === undefined) {
         console.log('[invalid]\n', toText(result))
-        await printToFile('invalid-domains.csv', toText(result))
         newValue = result.value
+        invalid = true
       } else if (normalized !== result.value) {
         console.log(`[normalizing] ${normalized}\n`, toText(result))
         newValue = normalized
       }
 
-      if (newValue !== result.value) {
+      if (invalid) {
+        await dbConnection.tx(async (t: DbTransaction) => {
+          if (result.verified) {
+            // check if org has another verified identity with the same type
+            const identities = await findIdentities(t, result.organizationId)
+            const verifiedDomainIdentities = identities.filter(
+              (i) =>
+                i.verified &&
+                i.type === OrganizationIdentityType.PRIMARY_DOMAIN &&
+                i.value !== result.value,
+            )
+            if (verifiedDomainIdentities.length > 0) {
+              // just remove unverified incorrect domain identity
+              await removeIdentity(t, result)
+            } else {
+              // need to do smt else
+              await printToFile('invalid-domains.csv', toText(result))
+            }
+          } else {
+            // just remove unverified incorrect domain identity
+            await removeIdentity(t, result)
+          }
+        })
+      } else if (newValue !== result.value) {
         await dbConnection.tx(async (t: DbTransaction) => {
           if (result.verified === true) {
             // check if identity already exists with the newValue as value
