@@ -1,4 +1,3 @@
-import { DbConnection } from '@crowd/database'
 import { DbTransaction, getDbConnection } from '@crowd/data-access-layer/src/database'
 import { DB_CONFIG } from '../conf'
 import { websiteNormalizer } from '@crowd/common'
@@ -17,13 +16,13 @@ async function findExisting(
 ): Promise<any | null> {
   const result = await conn.oneOrNone(
     `select * from "organizationIdentities"
-    where "organizationId" <> $(organizationId) and
+    where "tenantId" = $(tenantId) and
           platform = $(platform) and
           type = $(type) and
           verified = $(verified) and
           value = $(value)`,
     {
-      organizationId: record.organizationId,
+      tenantId: record.tenantId,
       platform: record.platform,
       type: record.type,
       verified: record.verified,
@@ -141,6 +140,7 @@ setImmediate(async () => {
 
   let count = 0
   let updatedCount = 0
+  let deletedCount = 0
   let page = 1
   const perPage = 500
 
@@ -180,23 +180,53 @@ setImmediate(async () => {
 
       if (newValue !== result.value) {
         await dbConnection.tx(async (t: DbTransaction) => {
-          const success = await tryUpdate(t, result, newValue)
-          if (success) {
-            updatedCount += 1
-          } else {
-            if (result.verified === true) {
-              const existing = await findExisting(t, result, newValue)
-              if (existing === null) {
-                throw new Error('Existing record not found!' + toText(result) + ' -> ' + newValue)
+          if (result.verified === true) {
+            // check if identity already exists with the newValue as value
+            const existing = await findExisting(t, result, newValue)
+            if (existing === null) {
+              // if it doesn't we can just update the current one
+              const success = await tryUpdate(t, result, newValue)
+              if (success) {
+                updatedCount += 1
               } else {
-                await printToFile(
-                  'to-merge.csv',
-                  `${toText(existing)},${result.organizationId},${result.value},${newValue}`,
+                throw new Error(
+                  '1. Failed to update the record! ' + toText(result) + ' ' + newValue,
                 )
               }
-            } else {
+            } else if (existing.organizationId === result.organizationId) {
+              // delete it because the same org already has the same identity that we are trying to update
+              await removeIdentity(t, result)
+              deletedCount += 1
+            } else if (existing.organizationId !== result.organizationId) {
+              // set to merge two orgs because they are about to share the same identity with the newValue
+              await printToFile(
+                'to-merge.csv',
+                `${toText(existing)},${result.organizationId},${result.value},${newValue}`,
+              )
+            }
+          } else {
+            const existing = await findExisting(t, result, newValue)
+            if (existing === null) {
+              const success = await tryUpdate(t, result, newValue)
+              if (success) {
+                updatedCount += 1
+              } else {
+                throw new Error(
+                  '2. Failed to update the record! ' + toText(result) + ' ' + newValue,
+                )
+              }
+            } else if (existing.organizationId === result.organizationId) {
               // just remove the value
               await removeIdentity(t, result)
+              deletedCount += 1
+            } else if (existing.organizationId !== result.organizationId) {
+              // since it's unverified it's ok to just set the value
+              const success = await tryUpdate(t, result, newValue)
+              if (success) {
+                updatedCount += 1
+              } else {
+                throw new Error('3. Failed to update record! ' + toText(result) + ' ' + newValue)
+              }
             }
           }
         })
@@ -208,9 +238,11 @@ setImmediate(async () => {
     console.log(
       '\n\n\n\n\n############## Processed',
       count,
-      'records and updated',
+      'records, updated',
       updatedCount,
-      'values\n\n\n\n\n',
+      'values, deleted',
+      deletedCount,
+      ' identities\n\n\n\n\n',
     )
 
     page += 1
