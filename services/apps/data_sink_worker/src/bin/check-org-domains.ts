@@ -84,7 +84,7 @@ setImmediate(async () => {
       }
 
       if (newValue) {
-        await tryUpdate(dbConnection, result, result.value.trim())
+        await tryUpdate(dbConnection, result, newValue)
       }
     }
 
