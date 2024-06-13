@@ -107,7 +107,7 @@ setImmediate(async () => {
       const normalized = websiteNormalizer(newValue, false)
       if (normalized === undefined) {
         console.log('[invalid]\n', toText(result))
-        await printToFile('invalid-domains.txt', toText(result))
+        await printToFile('invalid-domains.csv', toText(result))
       } else if (normalized !== result.value) {
         console.log(`[normalizing] ${normalized}\n`, toText(result))
         newValue = normalized
