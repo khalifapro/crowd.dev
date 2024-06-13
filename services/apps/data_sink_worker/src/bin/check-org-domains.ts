@@ -64,7 +64,7 @@ async function findExisting(conn: DbTransaction, record: any, newValue: string):
   const results = await conn.any(
     `
     select oi.*, (m.status is not null) as "lfMember" from "organizationIdentities" oi
-    inner join "lfxMemberships" m on m."organizationId" = oi."organizationId"
+    left join "lfxMemberships" m on m."organizationId" = oi."organizationId"
     where oi."tenantId" = $(tenantId) and
           oi.platform = $(platform) and
           oi.type = $(type) and
@@ -220,7 +220,7 @@ setImmediate(async () => {
 
   const query = `
     select oi.*, (m.status is not null) as "lfMember" from "organizationIdentities" oi
-    inner join "lfxMemberships" m on m."organizationId" = oi."organizationId"
+    left join "lfxMemberships" m on m."organizationId" = oi."organizationId"
     where oi."tenantId" = '875c38bd-2b1b-4e91-ad07-0cfbabb4c49f'
     and oi.type in ('primary-domain', 'alternative-domain')
     limit $(limit) offset $(offset);
