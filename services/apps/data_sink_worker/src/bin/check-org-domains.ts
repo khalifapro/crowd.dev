@@ -194,6 +194,7 @@ setImmediate(async () => {
             if (verifiedDomainIdentities.length > 0) {
               // just remove unverified incorrect domain identity
               await removeIdentity(t, result)
+              deletedCount += 1
             } else {
               // need to do smt else
               await printToFile('invalid-domains.csv', toText(result))
@@ -201,6 +202,7 @@ setImmediate(async () => {
           } else {
             // just remove unverified incorrect domain identity
             await removeIdentity(t, result)
+            deletedCount += 1
           }
         })
       } else if (newValue !== result.value) {
