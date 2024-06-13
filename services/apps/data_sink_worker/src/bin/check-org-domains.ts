@@ -2,7 +2,6 @@ import { DbConnection } from '@crowd/database'
 import { getDbConnection } from '@crowd/data-access-layer/src/database'
 import { DB_CONFIG } from '../conf'
 import { timeout, websiteNormalizer } from '@crowd/common'
-import { platform } from 'os'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -12,7 +11,8 @@ function toText(record: any): string {
 
 async function tryUpdate(conn: DbConnection, record: any, value): Promise<void> {
   try {
-    await conn.none(
+    console.log('updating value from ', record.value, ' to ', value)
+    const result = await conn.result(
       `
       update "organizationIdentities"
       set value = $(newValue)
@@ -31,6 +31,11 @@ async function tryUpdate(conn: DbConnection, record: any, value): Promise<void> 
         value: record.value,
       },
     )
+
+    if (result.rowCount !== 1) {
+      console.error('Failed to update record!', result)
+      await timeout(500)
+    }
   } catch (err) {
     console.error('Failed to update record!', err)
     await timeout(500)
