@@ -10,11 +10,30 @@ function toText(record: any): string {
   return `${record.organizationId},${record.platform},${record.type},${record.verified},"${record.value}"`
 }
 
+async function mergeSuggestion(
+  conn: DbTransaction,
+  primaryId: string,
+  secondaryId: string,
+): Promise<void> {
+  await conn.none(
+    `
+    insert into "organizationToMerge"("createdAt", "updatedAt", "organizationId", "toMergeId", similarity, status)
+    values(now(), now(), $(primaryId), $(secondaryId), 0.95, 'ready')
+    on conflict do nothing;
+    `,
+    {
+      primaryId,
+      secondaryId,
+    },
+  )
+}
+
 async function findIdentities(conn: DbTransaction, organizationId: string): Promise<any[]> {
   const results = await conn.any(
     `
-    select * from "organizationIdentities"
-    where "organizationId" = $(organizationId)
+    select oi.*, (m.status is not null) as "lfMember" from "organizationIdentities" oi
+    inner join "lfxMemberships" m on m."organizationId" = oi."organizationId"
+    where oi."organizationId" = $(organizationId)
     `,
     {
       organizationId,
@@ -27,12 +46,13 @@ async function findIdentities(conn: DbTransaction, organizationId: string): Prom
 async function findExisting(conn: DbTransaction, record: any, newValue: string): Promise<any[]> {
   const results = await conn.any(
     `
-    select * from "organizationIdentities"
-    where "tenantId" = $(tenantId) and
-          platform = $(platform) and
-          type = $(type) and
-          verified = $(verified) and
-          value = $(value)
+    select oi.*, (m.status is not null) as "lfMember" from "organizationIdentities" oi
+    inner join "lfxMemberships" m on m."organizationId" = oi."organizationId"
+    where oi."tenantId" = $(tenantId) and
+          oi.platform = $(platform) and
+          oi.type = $(type) and
+          oi.verified = $(verified) and
+          oi.value = $(value)
     `,
     {
       tenantId: record.tenantId,
@@ -44,6 +64,44 @@ async function findExisting(conn: DbTransaction, record: any, newValue: string):
   )
 
   return results
+}
+
+async function updateIdentityValueAndUnverify(
+  conn: DbTransaction,
+  record: any,
+  value: string,
+): Promise<void> {
+  if (record.verified === false) {
+    throw new Error('Cannot unverify an unverified identity!')
+  }
+
+  const result = await conn.result(
+    `
+    update "organizationIdentities"
+    set value = $(newValue),
+        verified = false
+    where "organizationId" = $(organizationId) and
+          platform = $(platform) and 
+          type = $(type) and
+          verified = true and
+          value = $(value)
+    `,
+    {
+      newValue: value,
+      organizationId: record.organizationId,
+      platform: record.platform,
+      type: record.type,
+      value: record.value,
+    },
+  )
+
+  if (result.rowCount > 1) {
+    throw new Error('Updated more than one record!')
+  }
+
+  if (result.rowCount === 0) {
+    throw new Error('No record updated!')
+  }
 }
 
 async function updateIdentityValue(conn: DbTransaction, record: any, value: string): Promise<void> {
@@ -145,9 +203,10 @@ setImmediate(async () => {
   const perPage = 500
 
   const query = `
-    select * from "organizationIdentities"
-    where "tenantId" = '875c38bd-2b1b-4e91-ad07-0cfbabb4c49f'
-    and type in ('primary-domain', 'alternative-domain')
+    select oi.*, (m.status is not null) as "lfMember" from "organizationIdentities" oi
+    inner join "lfxMemberships" m on m."organizationId" = oi."organizationId"
+    where oi."tenantId" = '875c38bd-2b1b-4e91-ad07-0cfbabb4c49f'
+    and oi.type in ('primary-domain', 'alternative-domain')
     limit $(limit) offset $(offset);
   `
 
@@ -221,13 +280,34 @@ setImmediate(async () => {
               await removeIdentity(t, result)
               deletedCount += 1
             } else if (existingRecords[0].organizationId !== result.organizationId) {
-              // set to merge two orgs because they are about to share the same identity with the newValue
-              await printToFile(
-                'to-merge.csv',
-                `${toText(existingRecords[0])},${result.organizationId},"${
-                  result.value
-                }","${newValue}"`,
-              )
+              // check lf memberships and possibly generate merge suggestions
+              if (existingRecords[0].lfMember && result.lfMember) {
+                // set to manual review file two orgs because they are about to share the same identity with the newValue
+                await printToFile(
+                  'to-merge.csv',
+                  `${toText(existingRecords[0])},${result.organizationId},"${
+                    result.value
+                  }","${newValue}"`,
+                )
+              } else if (existingRecords[0].lfMember && !result.lfMember) {
+                // mark the identity as unverified with the new value
+                await updateIdentityValueAndUnverify(t, result, newValue)
+                // add merge suggestion with primary being the one where org is lf member
+                await mergeSuggestion(t, existingRecords[0].organizationId, result.organizationId)
+              } else if (!existingRecords[0].lfMember && result.lfMember) {
+                // mark the identity as unverified with the new value
+                await updateIdentityValueAndUnverify(t, existingRecords[0], newValue)
+                // add merge suggestion with primary being the one where org is lf member
+                await mergeSuggestion(t, result.organizationId, existingRecords[0].organizationId)
+              } else {
+                // TODO check for activity counts
+                await printToFile(
+                  'to-merge.csv',
+                  `${toText(existingRecords[0])},${result.organizationId},"${
+                    result.value
+                  }","${newValue}"`,
+                )
+              }
             }
           } else {
             const existingRecords = await findExisting(t, result, newValue)
