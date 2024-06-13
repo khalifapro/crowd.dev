@@ -91,7 +91,7 @@ setImmediate(async () => {
       count += 1
     }
 
-    console.log('Processed', count, 'records')
+    console.log('\n\n\n\n\n############## Processed', count, 'records\n\n\n\n\n')
 
     page += 1
     results = await dbConnection.any(query, {
