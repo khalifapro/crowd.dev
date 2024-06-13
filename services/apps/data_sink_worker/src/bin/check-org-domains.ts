@@ -185,7 +185,7 @@ setImmediate(async () => {
               // set to merge two orgs because they are about to share the same identity with the newValue
               await printToFile(
                 'to-merge.csv',
-                `${toText(existing)},${result.organizationId},${result.value},${newValue}`,
+                `${toText(existing)},${result.organizationId},"${result.value}","${newValue}"`,
               )
             }
           } else {
