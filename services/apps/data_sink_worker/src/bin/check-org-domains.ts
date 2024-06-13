@@ -37,8 +37,8 @@ async function tryUpdate(conn: DbConnection, record: any, value): Promise<void> 
       await timeout(500)
     }
   } catch (err) {
-    console.error('Failed to update record!', err)
-    await timeout(500)
+    // console.error('Failed to update record!', err)
+    await timeout(20)
   }
 }
 
