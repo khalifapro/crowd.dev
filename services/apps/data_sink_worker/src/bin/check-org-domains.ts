@@ -45,6 +45,7 @@ async function tryUpdate(conn: DbConnection, record: any, value): Promise<void> 
 setImmediate(async () => {
   const dbConnection = await getDbConnection(DB_CONFIG())
 
+  let count = 0
   let page = 1
   const perPage = 500
 
@@ -86,7 +87,11 @@ setImmediate(async () => {
       if (newValue) {
         await tryUpdate(dbConnection, result, newValue)
       }
+
+      count += 1
     }
+
+    console.log('Processed', count, 'records')
 
     page += 1
     results = await dbConnection.any(query, {
