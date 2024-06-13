@@ -2,11 +2,12 @@ import { DbConnection } from '@crowd/database'
 import { getDbConnection } from '@crowd/data-access-layer/src/database'
 import { DB_CONFIG } from '../conf'
 import { websiteNormalizer } from '@crowd/common'
+import { promises as fs } from 'fs'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 function toText(record: any): string {
-  return `${record.organizationId}\t${record.platform}\t${record.type}\t${record.verified}\t${record.value}`
+  return `${record.organizationId},${record.platform},${record.type},${record.verified},"${record.value}"`
 }
 
 async function tryUpdate(conn: DbConnection, record: any, value): Promise<boolean> {
@@ -44,7 +45,34 @@ async function tryUpdate(conn: DbConnection, record: any, value): Promise<boolea
   }
 }
 
+async function printToFile(file: string, text: string, restart = false): Promise<void> {
+  try {
+    if (restart) {
+      // Write the text to the file, overwriting any existing content
+      await fs.writeFile(file, text + '\n')
+    } else {
+      try {
+        // Append the text to the file, creating it if it doesn't exist
+        await fs.appendFile(file, text + '\n')
+      } catch (err: any) {
+        if (err.code === 'ENOENT') {
+          // If the file does not exist, create it and write the text
+          await fs.writeFile(file, text + '\n')
+        } else {
+          // Re-throw any other errors
+          throw err
+        }
+      }
+    }
+  } catch (err) {
+    console.error(`Error handling the file ${file}:`, err)
+    throw err
+  }
+}
+
 setImmediate(async () => {
+  await printToFile('invalid-domains.csv', 'organizationId,platform,type,verified,value', true)
+  await printToFile('wont-update.csv', 'organizationId,platform,type,verified,value,newValue', true)
   const dbConnection = await getDbConnection(DB_CONFIG())
 
   let count = 0
@@ -64,7 +92,6 @@ setImmediate(async () => {
     offset: (page - 1) * perPage,
   })
 
-  console.log('organizationId\tplatform\ttype\tverified\tvalue')
   while (results.length > 0) {
     for (const result of results) {
       let newValue = result.value
@@ -80,6 +107,7 @@ setImmediate(async () => {
       const normalized = websiteNormalizer(newValue, false)
       if (normalized === undefined) {
         console.log('[invalid]\n', toText(result))
+        await printToFile('invalid-domains.txt', toText(result))
       } else if (normalized !== result.value) {
         console.log(`[normalizing] ${normalized}\n`, toText(result))
         newValue = normalized
@@ -89,6 +117,8 @@ setImmediate(async () => {
         const success = await tryUpdate(dbConnection, result, newValue)
         if (success) {
           updatedCount += 1
+        } else {
+          await printToFile('wont-update.csv', toText(result) + ',' + newValue)
         }
       }
 
@@ -109,4 +139,5 @@ setImmediate(async () => {
       offset: (page - 1) * perPage,
     })
   }
+  process.exit(0)
 })
