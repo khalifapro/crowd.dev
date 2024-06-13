@@ -15,12 +15,14 @@ async function findExisting(
   newValue: string,
 ): Promise<any | null> {
   const result = await conn.oneOrNone(
-    `select * from "organizationIdentities"
+    `
+    select * from "organizationIdentities"
     where "tenantId" = $(tenantId) and
           platform = $(platform) and
           type = $(type) and
           verified = $(verified) and
-          value = $(value)`,
+          value = $(value)
+    `,
     {
       tenantId: record.tenantId,
       platform: record.platform,
@@ -33,71 +35,33 @@ async function findExisting(
   return result
 }
 
-async function tryUpdate(conn: DbTransaction, record: any, value: string): Promise<boolean> {
-  try {
-    console.log('updating value from ', record.value, ' to ', value)
-    const result = await conn.result(
-      `
-      update "organizationIdentities"
-      set value = $(newValue)
-      where "organizationId" = $(organizationId) and
-            platform = $(platform) and 
-            type = $(type) and
-            verified = $(verified) and
-            value = $(value)
-      `,
-      {
-        newValue: value,
-        organizationId: record.organizationId,
-        platform: record.platform,
-        type: record.type,
-        verified: record.verified,
-        value: record.value,
-      },
-    )
+async function updateIdentityValue(conn: DbTransaction, record: any, value: string): Promise<void> {
+  const result = await conn.result(
+    `
+    update "organizationIdentities"
+    set value = $(newValue)
+    where "organizationId" = $(organizationId) and
+          platform = $(platform) and 
+          type = $(type) and
+          verified = $(verified) and
+          value = $(value)
+    `,
+    {
+      newValue: value,
+      organizationId: record.organizationId,
+      platform: record.platform,
+      type: record.type,
+      verified: record.verified,
+      value: record.value,
+    },
+  )
 
-    if (result.rowCount > 1) {
-      throw new Error('Updated more than one record!')
-    }
-
-    if (result.rowCount === 0) {
-      throw new Error('No record updated!')
-    }
-
-    return true
-  } catch (err) {
-    if (err.message === 'Updated more than one record!') {
-      throw err
-    }
-    if (err.message === 'No record updated!') {
-      throw err
-    }
-    return false
+  if (result.rowCount > 1) {
+    throw new Error('Updated more than one record!')
   }
-}
 
-async function printToFile(file: string, text: string, restart = false): Promise<void> {
-  try {
-    if (restart) {
-      // Write the text to the file, overwriting any existing content
-      await fs.writeFile(file, text + '\n')
-    } else {
-      try {
-        // Append the text to the file, creating it if it doesn't exist
-        await fs.appendFile(file, text + '\n')
-      } catch (err: any) {
-        if (err.code === 'ENOENT') {
-          // If the file does not exist, create it and write the text
-          await fs.writeFile(file, text + '\n')
-        } else {
-          // Re-throw any other errors
-          throw err
-        }
-      }
-    }
-  } catch (err) {
-    console.error(`Error handling the file ${file}:`, err)
-    throw err
+  if (result.rowCount === 0) {
+    throw new Error('No record updated!')
   }
 }
 
@@ -126,6 +90,31 @@ async function removeIdentity(conn: DbTransaction, record: any): Promise<void> {
 
   if (result.rowCount === 0) {
     throw new Error('No record deleted!')
+  }
+}
+
+async function printToFile(file: string, text: string, restart = false): Promise<void> {
+  try {
+    if (restart) {
+      // Write the text to the file, overwriting any existing content
+      await fs.writeFile(file, text + '\n')
+    } else {
+      try {
+        // Append the text to the file, creating it if it doesn't exist
+        await fs.appendFile(file, text + '\n')
+      } catch (err: any) {
+        if (err.code === 'ENOENT') {
+          // If the file does not exist, create it and write the text
+          await fs.writeFile(file, text + '\n')
+        } else {
+          // Re-throw any other errors
+          throw err
+        }
+      }
+    }
+  } catch (err) {
+    console.error(`Error handling the file ${file}:`, err)
+    throw err
   }
 }
 
@@ -159,6 +148,7 @@ setImmediate(async () => {
   while (results.length > 0) {
     for (const result of results) {
       let newValue = result.value
+
       if (newValue !== result.value.trim()) {
         console.log('[trimming]\n', toText(result))
         newValue = result.value.trim()
@@ -185,14 +175,8 @@ setImmediate(async () => {
             const existing = await findExisting(t, result, newValue)
             if (existing === null) {
               // if it doesn't we can just update the current one
-              const success = await tryUpdate(t, result, newValue)
-              if (success) {
-                updatedCount += 1
-              } else {
-                throw new Error(
-                  '1. Failed to update the record! ' + toText(result) + ' ' + newValue,
-                )
-              }
+              await updateIdentityValue(t, result, newValue)
+              updatedCount += 1
             } else if (existing.organizationId === result.organizationId) {
               // delete it because the same org already has the same identity that we are trying to update
               await removeIdentity(t, result)
@@ -207,26 +191,16 @@ setImmediate(async () => {
           } else {
             const existing = await findExisting(t, result, newValue)
             if (existing === null) {
-              const success = await tryUpdate(t, result, newValue)
-              if (success) {
-                updatedCount += 1
-              } else {
-                throw new Error(
-                  '2. Failed to update the record! ' + toText(result) + ' ' + newValue,
-                )
-              }
+              await updateIdentityValue(t, result, newValue)
+              updatedCount += 1
             } else if (existing.organizationId === result.organizationId) {
               // just remove the value since the value we are trying to set already belongs to the same org
               await removeIdentity(t, result)
               deletedCount += 1
             } else if (existing.organizationId !== result.organizationId) {
-              // since it's unverified it's ok to just set the value
-              const success = await tryUpdate(t, result, newValue)
-              if (success) {
-                updatedCount += 1
-              } else {
-                throw new Error('3. Failed to update record! ' + toText(result) + ' ' + newValue)
-              }
+              // since it's unverified it's ok to just set the value since two orgs can have the same unverified identities
+              await updateIdentityValue(t, result, newValue)
+              updatedCount += 1
             }
           }
         })
