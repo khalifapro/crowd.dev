@@ -1,11 +1,40 @@
+import { DbConnection } from '@crowd/database'
 import { getDbConnection } from '@crowd/data-access-layer/src/database'
 import { DB_CONFIG } from '../conf'
-import { websiteNormalizer } from '@crowd/common'
+import { timeout, websiteNormalizer } from '@crowd/common'
+import { platform } from 'os'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 function toText(record: any): string {
   return `${record.organizationId}\t${record.platform}\t${record.type}\t${record.verified}\t${record.value}`
+}
+
+async function tryUpdate(conn: DbConnection, record: any, value): Promise<void> {
+  try {
+    await conn.none(
+      `
+      update "organizationIdentities"
+      set value = $(newValue)
+      where "organizationId" = $(organizationId) and
+            platform = $(platform) and 
+            type = $(type) and
+            verified = $(verified) and
+            value = $(value)
+      `,
+      {
+        newValue: value,
+        organizationId: record.organizationId,
+        platform: record.platform,
+        type: record.type,
+        verified: record.verified,
+        value: record.value,
+      },
+    )
+  } catch (err) {
+    console.error('Failed to update record!', err)
+    await timeout(500)
+  }
 }
 
 setImmediate(async () => {
@@ -29,19 +58,28 @@ setImmediate(async () => {
   console.log('organizationId\tplatform\ttype\tverified\tvalue')
   while (results.length > 0) {
     for (const result of results) {
+      let newValue: string | undefined = undefined
       if (result.value !== result.value.trim()) {
-        console.log('[trim]\n', toText(result))
+        console.log('[trimming]\n', toText(result))
+        newValue = result.value.trim()
       } else if (result.value !== result.value.toLowerCase()) {
-        console.log('[case]\n', toText(result))
+        console.log('[casing]\n', toText(result))
+        newValue = result.value.toLowerCase()
       } else if (result.value !== result.value.trim().toLowerCase()) {
-        console.log('[trimcase]\n', toText(result))
+        console.log('[trimcasing]\n', toText(result))
+        newValue = result.value.trim().toLowerCase()
       } else {
         const normalized = websiteNormalizer(result.value, false)
         if (normalized === undefined) {
           console.log('[invalid]\n', toText(result))
         } else if (normalized !== result.value) {
-          console.log(`[normalize] ${normalized}\n`, toText(result))
+          console.log(`[normalizing] ${normalized}\n`, toText(result))
+          newValue = normalized
         }
+      }
+
+      if (newValue) {
+        await tryUpdate(dbConnection, result, result.value.trim())
       }
     }
 
