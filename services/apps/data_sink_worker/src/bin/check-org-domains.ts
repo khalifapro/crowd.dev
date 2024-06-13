@@ -9,7 +9,7 @@ function toText(record: any): string {
   return `${record.organizationId}\t${record.platform}\t${record.type}\t${record.verified}\t${record.value}`
 }
 
-async function tryUpdate(conn: DbConnection, record: any, value): Promise<void> {
+async function tryUpdate(conn: DbConnection, record: any, value): Promise<boolean> {
   try {
     console.log('updating value from ', record.value, ' to ', value)
     const result = await conn.result(
@@ -33,12 +33,13 @@ async function tryUpdate(conn: DbConnection, record: any, value): Promise<void> 
     )
 
     if (result.rowCount !== 1) {
-      console.error('Failed to update record!', result)
-      await timeout(500)
+      console.error('ERROR!!!!!!!  Failed to update record!', result)
+      return false
     }
+
+    return true
   } catch (err) {
-    // console.error('Failed to update record!', err)
-    await timeout(20)
+    return false
   }
 }
 
@@ -46,6 +47,7 @@ setImmediate(async () => {
   const dbConnection = await getDbConnection(DB_CONFIG())
 
   let count = 0
+  let updatedCount = 0
   let page = 1
   const perPage = 500
 
@@ -85,13 +87,22 @@ setImmediate(async () => {
       }
 
       if (newValue) {
-        await tryUpdate(dbConnection, result, newValue)
+        const success = await tryUpdate(dbConnection, result, newValue)
+        if (success) {
+          updatedCount += 1
+        }
       }
 
       count += 1
     }
 
-    console.log('\n\n\n\n\n############## Processed', count, 'records\n\n\n\n\n')
+    console.log(
+      '\n\n\n\n\n############## Processed',
+      count,
+      'records and updated',
+      updatedCount,
+      'values\n\n\n\n\n',
+    )
 
     page += 1
     results = await dbConnection.any(query, {
