@@ -2,12 +2,44 @@ import { DbTransaction, getDbConnection } from '@crowd/data-access-layer/src/dat
 import { DB_CONFIG } from '../conf'
 import { websiteNormalizer } from '@crowd/common'
 import { promises as fs } from 'fs'
-import { OrganizationIdentityType } from '@crowd/types'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 function toText(record: any): string {
   return `${record.organizationId},${record.platform},${record.type},${record.verified},"${record.value}"`
+}
+
+async function getActivityCounts(conn: DbTransaction, organizationIds: string[]): Promise<any> {
+  if (organizationIds.length === 0) {
+    throw new Error('No organization ids provided!')
+  }
+
+  const results = await conn.any(
+    `
+    select "organizationId", count(*) as count
+    from activities
+    where "deletedAt" is null
+      and "organizationId" in ($(organizationIds:csv))
+    group by "organizationId";
+    `,
+    {
+      organizationIds,
+    },
+  )
+
+  const data = {}
+
+  for (const orgId of organizationIds) {
+    const result = results.find((r) => r.organizationId === orgId)
+
+    if (result) {
+      data[orgId] = result.count
+    } else {
+      data[orgId] = 0
+    }
+  }
+
+  return data
 }
 
 async function mergeSuggestion(
@@ -26,21 +58,6 @@ async function mergeSuggestion(
       secondaryId,
     },
   )
-}
-
-async function findIdentities(conn: DbTransaction, organizationId: string): Promise<any[]> {
-  const results = await conn.any(
-    `
-    select oi.*, (m.status is not null) as "lfMember" from "organizationIdentities" oi
-    inner join "lfxMemberships" m on m."organizationId" = oi."organizationId"
-    where oi."organizationId" = $(organizationId)
-    `,
-    {
-      organizationId,
-    },
-  )
-
-  return results
 }
 
 async function findExisting(conn: DbTransaction, record: any, newValue: string): Promise<any[]> {
@@ -188,7 +205,6 @@ async function printToFile(file: string, text: string, restart = false): Promise
 }
 
 setImmediate(async () => {
-  await printToFile('invalid-domains.csv', 'organizationId,platform,type,verified,value', true)
   await printToFile(
     'to-merge.csv',
     'organizationId,platform,type,verified,value,toMergeId,toMergeValue,toMergeNewValue',
@@ -241,28 +257,9 @@ setImmediate(async () => {
 
       if (invalid) {
         await dbConnection.tx(async (t: DbTransaction) => {
-          if (result.verified) {
-            // check if org has another verified identity with the same type
-            const identities = await findIdentities(t, result.organizationId)
-            const verifiedDomainIdentities = identities.filter(
-              (i) =>
-                i.verified &&
-                i.type === OrganizationIdentityType.PRIMARY_DOMAIN &&
-                i.value !== result.value,
-            )
-            if (verifiedDomainIdentities.length > 0) {
-              // just remove unverified incorrect domain identity
-              await removeIdentity(t, result)
-              deletedCount += 1
-            } else {
-              // need to do smt else
-              await printToFile('invalid-domains.csv', toText(result))
-            }
-          } else {
-            // just remove unverified incorrect domain identity
-            await removeIdentity(t, result)
-            deletedCount += 1
-          }
+          // just remove unverified incorrect domain identity
+          await removeIdentity(t, result)
+          deletedCount += 1
         })
       } else if (newValue !== result.value) {
         await dbConnection.tx(async (t: DbTransaction) => {
@@ -300,13 +297,25 @@ setImmediate(async () => {
                 // add merge suggestion with primary being the one where org is lf member
                 await mergeSuggestion(t, result.organizationId, existingRecords[0].organizationId)
               } else {
-                // TODO check for activity counts
-                await printToFile(
-                  'to-merge.csv',
-                  `${toText(existingRecords[0])},${result.organizationId},"${
-                    result.value
-                  }","${newValue}"`,
-                )
+                const activityCounts = await getActivityCounts(t, [
+                  result.organizationId,
+                  existingRecords[0].organizationId,
+                ])
+
+                if (
+                  activityCounts[result.organizationId] >
+                  activityCounts[existingRecords[0].organizationId]
+                ) {
+                  // mark the identity as unverified with the new value
+                  await updateIdentityValueAndUnverify(t, existingRecords[0], newValue)
+                  // add merge suggestion with primary being the one with more activity
+                  await mergeSuggestion(t, result.organizationId, existingRecords[0].organizationId)
+                } else {
+                  // mark the identity as unverified with the new value
+                  await updateIdentityValueAndUnverify(t, result, newValue)
+                  // add merge suggestion with primary being the one with more activity
+                  await mergeSuggestion(t, existingRecords[0].organizationId, result.organizationId)
+                }
               }
             }
           } else {
