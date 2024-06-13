@@ -10,7 +10,31 @@ function toText(record: any): string {
   return `${record.organizationId},${record.platform},${record.type},${record.verified},"${record.value}"`
 }
 
-async function tryUpdate(conn: DbTransaction, record: any, value): Promise<boolean> {
+async function findExisting(
+  conn: DbTransaction,
+  record: any,
+  newValue: string,
+): Promise<any | null> {
+  const result = await conn.oneOrNone(
+    `select * from "organizationIdentities"
+    where "organizationId" <> $(organizationId) and
+          platform = $(platform) and
+          type = $(type) and
+          verified = $(verified) and
+          value = $(value)`,
+    {
+      organizationId: record.organizationId,
+      platform: record.platform,
+      type: record.type,
+      verified: record.verified,
+      value: newValue,
+    },
+  )
+
+  return result
+}
+
+async function tryUpdate(conn: DbTransaction, record: any, value: string): Promise<boolean> {
   try {
     console.log('updating value from ', record.value, ' to ', value)
     const result = await conn.result(
@@ -108,7 +132,11 @@ async function removeIdentity(conn: DbTransaction, record: any): Promise<void> {
 
 setImmediate(async () => {
   await printToFile('invalid-domains.csv', 'organizationId,platform,type,verified,value', true)
-  await printToFile('wont-update.csv', 'organizationId,platform,type,verified,value,newValue', true)
+  await printToFile(
+    'to-merge.csv',
+    'organizationId,platform,type,verified,value,toMergeId,toMergeValue,toMergeNewValue',
+    true,
+  )
   const dbConnection = await getDbConnection(DB_CONFIG())
 
   let count = 0
@@ -157,7 +185,15 @@ setImmediate(async () => {
             updatedCount += 1
           } else {
             if (result.verified === true) {
-              await printToFile('wont-update.csv', toText(result) + ',' + newValue)
+              const existing = await findExisting(t, result, newValue)
+              if (existing === null) {
+                throw new Error('Existing record not found!' + toText(result) + ' -> ' + newValue)
+              } else {
+                await printToFile(
+                  'to-merge.csv',
+                  `${toText(existing)},${result.organizationId},${result.value},${newValue}`,
+                )
+              }
             } else {
               // just remove the value
               await removeIdentity(t, result)
