@@ -325,6 +325,7 @@ setImmediate(async () => {
               ) {
                 // mark the identity as unverified with the new value
                 await updateIdentityValueAndUnverify(t, result, newValue)
+                updatedCount += 1
                 // add merge suggestion with primary being the one where org is lf member
                 await mergeSuggestion(t, existingRecords[0].organizationId, result.organizationId)
               } else if (
@@ -333,6 +334,7 @@ setImmediate(async () => {
               ) {
                 // mark the identity as unverified with the new value
                 await updateIdentityValueAndUnverify(t, existingRecords[0], newValue)
+                updatedCount += 1
                 // add merge suggestion with primary being the one where org is lf member
                 await mergeSuggestion(t, result.organizationId, existingRecords[0].organizationId)
               } else {
@@ -347,11 +349,13 @@ setImmediate(async () => {
                 ) {
                   // mark the identity as unverified with the new value
                   await updateIdentityValueAndUnverify(t, existingRecords[0], newValue)
+                  updatedCount += 1
                   // add merge suggestion with primary being the one with more activity
                   await mergeSuggestion(t, result.organizationId, existingRecords[0].organizationId)
                 } else {
                   // mark the identity as unverified with the new value
                   await updateIdentityValueAndUnverify(t, result, newValue)
+                  updatedCount += 1
                   // add merge suggestion with primary being the one with more activity
                   await mergeSuggestion(t, existingRecords[0].organizationId, result.organizationId)
                 }
