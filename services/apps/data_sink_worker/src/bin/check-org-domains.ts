@@ -40,7 +40,7 @@ setImmediate(async () => {
         if (normalized === undefined) {
           console.log('[invalid]\n', toText(result))
         } else if (normalized !== result.value) {
-          console.log('[normalize]\n', toText(result))
+          console.log(`[normalize] ${normalized}\n`, toText(result))
         }
       }
     }
