@@ -1,7 +1,7 @@
 import { DbConnection } from '@crowd/database'
 import { getDbConnection } from '@crowd/data-access-layer/src/database'
 import { DB_CONFIG } from '../conf'
-import { timeout, websiteNormalizer } from '@crowd/common'
+import { websiteNormalizer } from '@crowd/common'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -37,6 +37,7 @@ async function tryUpdate(conn: DbConnection, record: any, value): Promise<boolea
       return false
     }
 
+    console.log(record.value, ' updated to ', value)
     return true
   } catch (err) {
     return false
