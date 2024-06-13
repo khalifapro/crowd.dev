@@ -249,6 +249,7 @@ setImmediate(async () => {
     select oi.* from "organizationIdentities" oi
     where oi."tenantId" = '875c38bd-2b1b-4e91-ad07-0cfbabb4c49f'
     and oi.type in ('primary-domain', 'alternative-domain')
+    order by "createdAt"
     limit $(limit) offset $(offset);
   `
 
