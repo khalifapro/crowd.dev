@@ -216,7 +216,7 @@ setImmediate(async () => {
                 )
               }
             } else if (existing.organizationId === result.organizationId) {
-              // just remove the value
+              // just remove the value since the value we are trying to set already belongs to the same org
               await removeIdentity(t, result)
               deletedCount += 1
             } else if (existing.organizationId !== result.organizationId) {
