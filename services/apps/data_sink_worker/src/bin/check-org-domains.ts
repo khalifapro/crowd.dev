@@ -67,27 +67,25 @@ setImmediate(async () => {
   console.log('organizationId\tplatform\ttype\tverified\tvalue')
   while (results.length > 0) {
     for (const result of results) {
-      let newValue: string | undefined = undefined
-      if (result.value !== result.value.trim()) {
+      let newValue: string = result.value
+      if (newValue !== result.value.trim()) {
         console.log('[trimming]\n', toText(result))
         newValue = result.value.trim()
-      } else if (result.value !== result.value.toLowerCase()) {
+      }
+      if (newValue !== result.value.toLowerCase()) {
         console.log('[casing]\n', toText(result))
         newValue = result.value.toLowerCase()
-      } else if (result.value !== result.value.trim().toLowerCase()) {
-        console.log('[trimcasing]\n', toText(result))
-        newValue = result.value.trim().toLowerCase()
-      } else {
-        const normalized = websiteNormalizer(result.value, false)
-        if (normalized === undefined) {
-          console.log('[invalid]\n', toText(result))
-        } else if (normalized !== result.value) {
-          console.log(`[normalizing] ${normalized}\n`, toText(result))
-          newValue = normalized
-        }
       }
 
-      if (newValue) {
+      const normalized = websiteNormalizer(newValue, false)
+      if (normalized === undefined) {
+        console.log('[invalid]\n', toText(result))
+      } else if (normalized !== result.value) {
+        console.log(`[normalizing] ${normalized}\n`, toText(result))
+        newValue = normalized
+      }
+
+      if (newValue !== result.value) {
         const success = await tryUpdate(dbConnection, result, newValue)
         if (success) {
           updatedCount += 1
