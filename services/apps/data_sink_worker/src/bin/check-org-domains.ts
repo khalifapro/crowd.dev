@@ -9,12 +9,8 @@ function toText(record: any): string {
   return `${record.organizationId},${record.platform},${record.type},${record.verified},"${record.value}"`
 }
 
-async function findExisting(
-  conn: DbTransaction,
-  record: any,
-  newValue: string,
-): Promise<any | null> {
-  const result = await conn.oneOrNone(
+async function findExisting(conn: DbTransaction, record: any, newValue: string): Promise<any[]> {
+  const results = await conn.any(
     `
     select * from "organizationIdentities"
     where "tenantId" = $(tenantId) and
@@ -32,7 +28,7 @@ async function findExisting(
     },
   )
 
-  return result
+  return results
 }
 
 async function updateIdentityValue(conn: DbTransaction, record: any, value: string): Promise<void> {
@@ -172,32 +168,38 @@ setImmediate(async () => {
         await dbConnection.tx(async (t: DbTransaction) => {
           if (result.verified === true) {
             // check if identity already exists with the newValue as value
-            const existing = await findExisting(t, result, newValue)
-            if (existing === null) {
+            const existingRecords = await findExisting(t, result, newValue)
+            if (existingRecords.length === 0) {
               // if it doesn't we can just update the current one
               await updateIdentityValue(t, result, newValue)
               updatedCount += 1
-            } else if (existing.organizationId === result.organizationId) {
+            } else if (existingRecords.length > 1) {
+              throw new Error('More than one record found!' + toText(result) + ' ' + newValue)
+            } else if (existingRecords[0].organizationId === result.organizationId) {
               // delete it because the same org already has the same identity that we are trying to update
               await removeIdentity(t, result)
               deletedCount += 1
-            } else if (existing.organizationId !== result.organizationId) {
+            } else if (existingRecords[0].organizationId !== result.organizationId) {
               // set to merge two orgs because they are about to share the same identity with the newValue
               await printToFile(
                 'to-merge.csv',
-                `${toText(existing)},${result.organizationId},"${result.value}","${newValue}"`,
+                `${toText(existingRecords[0])},${result.organizationId},"${
+                  result.value
+                }","${newValue}"`,
               )
             }
           } else {
-            const existing = await findExisting(t, result, newValue)
-            if (existing === null) {
+            const existingRecords = await findExisting(t, result, newValue)
+            if (existingRecords.length === 0) {
               await updateIdentityValue(t, result, newValue)
               updatedCount += 1
-            } else if (existing.organizationId === result.organizationId) {
+            } else if (
+              existingRecords.find((r) => r.organizationId === result.organizationId) !== undefined
+            ) {
               // just remove the value since the value we are trying to set already belongs to the same org
               await removeIdentity(t, result)
               deletedCount += 1
-            } else if (existing.organizationId !== result.organizationId) {
+            } else {
               // since it's unverified it's ok to just set the value since two orgs can have the same unverified identities
               await updateIdentityValue(t, result, newValue)
               updatedCount += 1
