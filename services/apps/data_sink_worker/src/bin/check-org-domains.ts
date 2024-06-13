@@ -68,7 +68,7 @@ async function updateIdentityValue(conn: DbTransaction, record: any, value: stri
 async function removeIdentity(conn: DbTransaction, record: any): Promise<void> {
   const result = await conn.result(
     `
-    delete "organizationIdentities"
+    delete from "organizationIdentities"
     where "organizationId" = $(organizationId) and
           platform = $(platform) and 
           type = $(type) and
