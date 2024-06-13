@@ -1,5 +1,5 @@
 import { DbConnection } from '@crowd/database'
-import { getDbConnection } from '@crowd/data-access-layer/src/database'
+import { DbTransaction, getDbConnection } from '@crowd/data-access-layer/src/database'
 import { DB_CONFIG } from '../conf'
 import { websiteNormalizer } from '@crowd/common'
 import { promises as fs } from 'fs'
@@ -10,7 +10,7 @@ function toText(record: any): string {
   return `${record.organizationId},${record.platform},${record.type},${record.verified},"${record.value}"`
 }
 
-async function tryUpdate(conn: DbConnection, record: any, value): Promise<boolean> {
+async function tryUpdate(conn: DbTransaction, record: any, value): Promise<boolean> {
   try {
     console.log('updating value from ', record.value, ' to ', value)
     const result = await conn.result(
@@ -33,14 +33,22 @@ async function tryUpdate(conn: DbConnection, record: any, value): Promise<boolea
       },
     )
 
-    if (result.rowCount !== 1) {
-      console.error('ERROR!!!!!!!  Failed to update record!', result)
-      return false
+    if (result.rowCount > 1) {
+      throw new Error('Updated more than one record!')
     }
 
-    console.log(record.value, ' updated to ', value)
+    if (result.rowCount === 0) {
+      throw new Error('No record updated!')
+    }
+
     return true
   } catch (err) {
+    if (err.message === 'Updated more than one record!') {
+      throw err
+    }
+    if (err.message === 'No record updated!') {
+      throw err
+    }
     return false
   }
 }
@@ -67,6 +75,34 @@ async function printToFile(file: string, text: string, restart = false): Promise
   } catch (err) {
     console.error(`Error handling the file ${file}:`, err)
     throw err
+  }
+}
+
+async function removeIdentity(conn: DbTransaction, record: any): Promise<void> {
+  const result = await conn.result(
+    `
+    delete "organizationIdentities"
+    where "organizationId" = $(organizationId) and
+          platform = $(platform) and 
+          type = $(type) and
+          verified = $(verified) and
+          value = $(value)
+    `,
+    {
+      organizationId: record.organizationId,
+      platform: record.platform,
+      type: record.type,
+      verified: record.verified,
+      value: record.value,
+    },
+  )
+
+  if (result.rowCount > 1) {
+    throw new Error('Deleted more than one record!')
+  }
+
+  if (result.rowCount === 0) {
+    throw new Error('No record deleted!')
   }
 }
 
@@ -108,18 +144,26 @@ setImmediate(async () => {
       if (normalized === undefined) {
         console.log('[invalid]\n', toText(result))
         await printToFile('invalid-domains.csv', toText(result))
+        newValue = result.value
       } else if (normalized !== result.value) {
         console.log(`[normalizing] ${normalized}\n`, toText(result))
         newValue = normalized
       }
 
       if (newValue !== result.value) {
-        const success = await tryUpdate(dbConnection, result, newValue)
-        if (success) {
-          updatedCount += 1
-        } else {
-          await printToFile('wont-update.csv', toText(result) + ',' + newValue)
-        }
+        await dbConnection.tx(async (t: DbTransaction) => {
+          const success = await tryUpdate(t, result, newValue)
+          if (success) {
+            updatedCount += 1
+          } else {
+            if (result.verified === true) {
+              await printToFile('wont-update.csv', toText(result) + ',' + newValue)
+            } else {
+              // just remove the value
+              await removeIdentity(t, result)
+            }
+          }
+        })
       }
 
       count += 1
