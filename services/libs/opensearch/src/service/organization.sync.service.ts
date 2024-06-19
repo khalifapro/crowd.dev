@@ -97,6 +97,9 @@ export class OrganizationSyncService {
   public async cleanupOrganizationIndex(tenantId: string, batchSize = 300): Promise<void> {
     this.log.warn({ tenantId }, 'Cleaning up organization index!')
 
+    const docCount = await this.openSearchService.getDocumentCount(OpenSearchIndex.ORGANIZATIONS)
+    this.log.info({ tenantId, docCount }, 'Total documents in organization index!')
+
     // first delete all documents that have uuid_segmentId set
     let query: any = {
       bool: {
