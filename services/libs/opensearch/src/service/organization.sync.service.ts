@@ -160,8 +160,19 @@ export class OrganizationSyncService {
       // Process bulk removals in chunks
       while (idsToRemove.length >= batchSize) {
         const batch = idsToRemove.splice(0, batchSize)
-        this.log.warn({ tenantId, batch }, 'Removing organizations from index!')
+        this.log.warn(
+          { tenantId, docsToRemove: batch.length },
+          'Removing organizations from index!',
+        )
         await this.openSearchService.bulkRemoveFromIndex(batch, OpenSearchIndex.ORGANIZATIONS)
+      }
+
+      if (idsToRemove.length > 0) {
+        this.log.warn(
+          { tenantId, docsToRemove: idsToRemove.length },
+          'Removing organizations from index!',
+        )
+        await this.openSearchService.bulkRemoveFromIndex(idsToRemove, OpenSearchIndex.ORGANIZATIONS)
       }
 
       // use last createdAt to get the next page
