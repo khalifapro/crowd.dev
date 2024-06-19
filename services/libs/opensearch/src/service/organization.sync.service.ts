@@ -100,22 +100,7 @@ export class OrganizationSyncService {
     const docCount = await this.openSearchService.getDocumentCount(OpenSearchIndex.ORGANIZATIONS)
     this.log.info({ tenantId, docCount }, 'Total documents in organization index!')
 
-    // first delete all documents that have uuid_segmentId set
-    let query: any = {
-      bool: {
-        must: [
-          {
-            exists: {
-              field: 'uuid_segmentId',
-            },
-          },
-        ],
-      },
-    }
-
-    await this.openSearchService.deleteByQuery(OpenSearchIndex.ORGANIZATIONS, query)
-
-    query = {
+    const query = {
       bool: {
         filter: {
           term: {
@@ -126,7 +111,7 @@ export class OrganizationSyncService {
     }
 
     const sort = [{ date_createdAt: 'asc' }]
-    const include = ['date_createdAt', 'uuid_organizationId']
+    const include = ['date_createdAt', 'uuid_organizationId', 'uuid_segmentId']
     const pageSize = 1000
     let lastCreatedAt: string
 
@@ -138,7 +123,11 @@ export class OrganizationSyncService {
       sort,
       undefined,
       include,
-    )) as ISearchHit<{ date_createdAt: string; uuid_organizationId: string }>[]
+    )) as ISearchHit<{
+      date_createdAt: string
+      uuid_organizationId: string
+      uuid_segmentId: string
+    }>[]
 
     let processed = 0
     const idsToRemove: string[] = []
@@ -148,6 +137,10 @@ export class OrganizationSyncService {
         { tenantId, toProcess: results.length },
         'Processing organization documents from OpenSearch!',
       )
+      const withSegmentIds = results
+        .filter((r) => !!r._source.uuid_segmentId)
+        .map((r) => r._source.uuid_organizationId)
+
       // check every organization if they exists in the database and if not remove them from the index
       const dbIds = await this.orgRepo.checkOrganizationsExists(
         tenantId,
@@ -155,7 +148,11 @@ export class OrganizationSyncService {
       )
 
       const toRemove = results
-        .filter((r) => !dbIds.includes(r._source.uuid_organizationId))
+        .filter(
+          (r) =>
+            !dbIds.includes(r._source.uuid_organizationId) ||
+            withSegmentIds.includes(r._source.uuid_organizationId),
+        )
         .map((r) => r._id)
 
       idsToRemove.push(...toRemove)
@@ -184,7 +181,11 @@ export class OrganizationSyncService {
         sort,
         lastCreatedAt,
         include,
-      )) as ISearchHit<{ date_createdAt: string; uuid_organizationId: string }>[]
+      )) as ISearchHit<{
+        date_createdAt: string
+        uuid_organizationId: string
+        uuid_segmentId: string
+      }>[]
     }
 
     // Remove any remaining IDs that were not processed
