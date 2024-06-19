@@ -109,7 +109,7 @@ export class OrganizationSyncService {
 
     const sort = [{ date_createdAt: 'asc' }]
     const include = ['date_createdAt', 'uuid_organizationId']
-    const pageSize = 500
+    const pageSize = 1000
     let lastCreatedAt: string
 
     let results = (await this.openSearchService.search(
