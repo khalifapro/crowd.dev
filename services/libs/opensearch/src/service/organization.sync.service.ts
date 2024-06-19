@@ -175,12 +175,14 @@ export class OrganizationSyncService {
         await this.openSearchService.bulkRemoveFromIndex(idsToRemove, OpenSearchIndex.ORGANIZATIONS)
       }
 
+      const docCount = await this.openSearchService.getDocumentCount(OpenSearchIndex.ORGANIZATIONS)
+
       // use last createdAt to get the next page
       lastCreatedAt = results[results.length - 1]._source.date_createdAt
 
       processed += results.length
       this.log.warn(
-        { tenantId, lastCreatedAt },
+        { tenantId, lastCreatedAt, remainingDocs: docCount },
         `Processed ${processed} organizations while cleaning up tenant!`,
       )
 
