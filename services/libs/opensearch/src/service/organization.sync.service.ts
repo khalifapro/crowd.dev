@@ -126,6 +126,10 @@ export class OrganizationSyncService {
     const idsToRemove: string[] = []
 
     while (results.length > 0) {
+      this.log.info(
+        { tenantId, toProcess: results.length },
+        'Processing organization documents from OpenSearch!',
+      )
       // check every organization if they exists in the database and if not remove them from the index
       const dbIds = await this.orgRepo.checkOrganizationsExists(
         tenantId,
