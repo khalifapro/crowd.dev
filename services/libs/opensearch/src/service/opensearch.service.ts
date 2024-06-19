@@ -381,6 +381,21 @@ export class OpenSearchService extends LoggerBase {
     }
   }
 
+  public async deleteByQuery(index: OpenSearchIndex, query: unknown): Promise<void> {
+    try {
+      const indexName = this.indexVersionMap.get(index)
+      await this.client.deleteByQuery({
+        index: indexName,
+        body: {
+          query,
+        },
+      })
+    } catch (err) {
+      this.log.error(err, { index, query }, 'Failed to delete documents by query!')
+      throw new Error('Failed to delete documents by query!')
+    }
+  }
+
   public async search<T>(
     index: OpenSearchIndex,
     query?: unknown,
