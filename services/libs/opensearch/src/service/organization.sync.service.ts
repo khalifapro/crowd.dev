@@ -375,7 +375,7 @@ export class OrganizationSyncService {
     const syncOrgsToOpensearchForMergeSuggestions = async (organizationIds) => {
       for (const orgId of organizationIds) {
         const data = await this.orgRepo.getOrganizationData(orgId)
-        if (data) {
+        if (!data) {
           this.log.error({ orgId, data }, 'Organization not found in database!')
         } else {
           const prefixed = OrganizationSyncService.prefixData(data)
