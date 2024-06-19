@@ -145,11 +145,15 @@ export class OrganizationSyncService {
         await this.openSearchService.bulkRemoveFromIndex(batch, OpenSearchIndex.ORGANIZATIONS)
       }
 
-      processed += results.length
-      this.log.warn({ tenantId }, `Processed ${processed} organizations while cleaning up tenant!`)
-
       // use last createdAt to get the next page
       lastCreatedAt = results[results.length - 1]._source.date_createdAt
+
+      processed += results.length
+      this.log.warn(
+        { tenantId, lastCreatedAt },
+        `Processed ${processed} organizations while cleaning up tenant!`,
+      )
+
       results = (await this.openSearchService.search(
         OpenSearchIndex.ORGANIZATIONS,
         query,
