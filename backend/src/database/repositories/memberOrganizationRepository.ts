@@ -50,6 +50,8 @@ class MemberOrganizationRepository {
   }
 
   static async removeMemberRole(role: IMemberOrganization, options: IRepositoryOptions) {
+    console.log(`Removing role: `)
+    console.log(role)
     const seq = SequelizeRepository.getSequelize(options)
     const transaction = SequelizeRepository.getTransaction(options)
 
