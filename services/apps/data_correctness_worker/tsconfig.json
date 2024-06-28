@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "lib": ["es2017", "dom", "ES2021.String"],
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "sourceMap": true,
+    "target": "es2017",
+    "types": ["node", "jest"],
+    "baseUrl": "./src",
+    "paths": {
+      "@/*": ["./*"]
+    },
+    "skipLibCheck": true
+  },
+  "exclude": ["node_modules"]
+}

@@ -1,0 +1,41 @@
+{
+  "name": "@crowd/data-correctness-worker",
+  "scripts": {
+    "start": "CROWD_TEMPORAL_TASKQUEUE=data-correctness SERVICE=data-correctness-worker tsx src/main.ts",
+    "start:debug:local": "set -a && . ../../../backend/.env.dist.local && . ../../../backend/.env.override.local && set +a && CROWD_TEMPORAL_TASKQUEUE=data-correctness SERVICE=data-correctness-worker LOG_LEVEL=trace tsx --inspect=0.0.0.0:9232 src/main.ts",
+    "start:debug": "CROWD_TEMPORAL_TASKQUEUE=data-correctness SERVICE=data-correctness-worker LOG_LEVEL=trace tsx --inspect=0.0.0.0:9232 src/main.ts",
+    "dev:local": "nodemon --watch src --watch ../../libs --ext ts --exec pnpm run start:debug:local",
+    "dev": "nodemon --watch src --watch ../../libs --ext ts --exec pnpm run start:debug",
+    "lint": "npx eslint --ext .ts src --max-warnings=0",
+    "format": "npx prettier --write \"src/**/*.ts\"",
+    "format-check": "npx prettier --check .",
+    "tsc-check": "tsc --noEmit",
+    "test": "jest --clearCache && set -a && . ./.env.test.local && set +a && NODE_ENV=test SERVICE=test jest --runInBand --verbose --forceExit",
+    "testf": "jest --clearCache && set -a && . ./.env.test.local && set +a && NODE_ENV=test SERVICE=test jest --runInBand --verbose --forceExit --html --outputFile=./results.json",
+    "test:custom-reporter": "jest --clearCache && set -a && . ./.env.test.local && set +a && NODE_ENV=test SERVICE=test jest --runInBand --verbose --forceExit --reporters=./src/__tests__/flag-bad-identities/flagBadIdentitiesReporter.js --globalSetup=./src/__tests__/flag-bad-identities/setup.js --globalTeardown=./src/__tests__/flag-bad-identities/teardown.js --testEnvironment=./src/__tests__/flag-bad-identities/environment.js"
+  },
+  "dependencies": {
+    "@crowd/archetype-standard": "workspace:*",
+    "@crowd/archetype-worker": "workspace:*",
+    "@crowd/common": "workspace:*",
+    "@crowd/data-access-layer": "workspace:*",
+    "@crowd/feature-flags": "workspace:*",
+    "@crowd/logging": "workspace:*",
+    "@crowd/types": "workspace:*",
+    "@crowd/bedrock": "workspace:*",
+    "@temporalio/client": "~1.8.6",
+    "@temporalio/workflow": "~1.8.6",
+    "tsx": "^4.7.1",
+    "typescript": "^5.2.2",
+    "axios": "^1.6.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.8.2",
+    "@types/jest": "^29.5.1",
+    "nodemon": "^3.0.1",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.0",
+    "jest-html-reporter": "^3.10.2",
+    "jest-environment-node": "^29.7.0"
+  }
+}
