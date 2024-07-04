@@ -28,7 +28,7 @@ async function getDistinctOrgIds(qx: QueryExecutor, { countOnly = false, limit =
 }
 
 async function checkIfOrgExists(qx: QueryExecutor, orgId: string) {
-    return qx.selectOne(
+    return qx.select(
         `select id from organizations where id = $(orgId)`,
         {
             orgId
