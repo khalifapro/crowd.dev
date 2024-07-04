@@ -58,22 +58,22 @@ setImmediate(async () => {
 
     console.log('Total distinct org ids found:', totalOrgIds)
 
-    // while (processedOrgIds < totalOrgIds) {
-    //     const rows = await getDistinctOrgIds(qx, { limit: BATCH_SIZE, offset: processedOrgIds })
+    while (processedOrgIds < totalOrgIds) {
+        const rows = await getDistinctOrgIds(qx, { limit: BATCH_SIZE, offset: processedOrgIds })
 
-    //     for (const row of rows) {
-    //         const orgId = row.organizationId
-    //         const orgExists = await checkIfOrgExists(qx, orgId)
-    //         if (!orgExists) {
-    //             console.log('Org does not exist:', orgId)
-    //             await deleteOrganizationSegmentsAgg(qx, orgId)
-    //         }
+        for (const row of rows) {
+            const orgId = row.organizationId
+            const orgExists = await checkIfOrgExists(qx, orgId)
+            if (!orgExists) {
+                console.log('Org does not exist:', orgId)
+                await deleteOrganizationSegmentsAgg(qx, orgId)
+            }
 
-    //         processedOrgIds++
-    //     }
+            processedOrgIds++
+        }
 
-    //     console.log(`Processed ${processedOrgIds}/${totalOrgIds}!`)
-    // }
+        console.log(`Processed ${processedOrgIds}/${totalOrgIds}!`)
+    }
 
     console.log('Done cleaning orgs organizationSegmentsAgg!')
 
