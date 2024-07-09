@@ -26,4 +26,14 @@ export class MemberRepository extends RepositoryBase<MemberRepository> {
 
     return results
   }
+
+  public async getMembersWithGitIdentities(): Promise<string[]> {
+    const results = await this.db().any(`
+      SELECT DISTINCT "memberId"
+      FROM "memberIdentities"
+      WHERE "platform" = 'git'
+    `)
+
+    return results.map((r) => r.memberId)
+  }
 }

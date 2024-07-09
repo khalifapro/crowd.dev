@@ -15,6 +15,7 @@
     "script:sync-all-activities": "SERVICE=script tsx src/bin/sync-all-activities.ts",
     "script:sync-all-organizations": "SERVICE=script tsx src/bin/sync-all-organizations.ts",
     "script:sync-member": "SERVICE=script tsx src/bin/sync-member.ts",
+    "script:sync-git-members": "SERVICE=script tsx src/bin/sync-git-members.ts",
     "script:sync-activity": "SERVICE=script tsx src/bin/sync-activity.ts",
     "script:sync-organization": "SERVICE=script tsx src/bin/sync-organization.ts",
     "script:sync-tenant-members": "SERVICE=script tsx src/bin/sync-tenant-members.ts",
