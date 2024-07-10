@@ -7,25 +7,59 @@ import { DB_CONFIG, OPENSEARCH_CONFIG, REDIS_CONFIG } from '../conf'
 
 const log = getServiceLogger()
 
+const BATCH_SIZE = 100
+const MAX_RETRIES = 3
+
+async function syncBatch(service: MemberSyncService, members: any[], retryCount = 0) {
+  try {
+    await service.syncMembers(members)
+    log.info(`Successfully synced batch of ${members.length} members`)
+  } catch (error) {
+    if (retryCount < MAX_RETRIES) {
+      log.warn(`Error syncing batch, retrying (attempt ${retryCount + 1}): ${error.message}`)
+      await syncBatch(service, members, retryCount + 1)
+    } else {
+      log.error(`Failed to sync batch after ${MAX_RETRIES} attempts: ${error.message}`)
+      throw error
+    }
+  }
+}
+
 setImmediate(async () => {
-  const openSearchService = new OpenSearchService(log, OPENSEARCH_CONFIG())
+  try {
+    const openSearchService = new OpenSearchService(log, OPENSEARCH_CONFIG())
+    const redis = await getRedisClient(REDIS_CONFIG(), true)
+    const dbConnection = await getDbConnection(DB_CONFIG())
+    const store = new DbStore(log, dbConnection)
 
-  const redis = await getRedisClient(REDIS_CONFIG(), true)
+    const repo = new MemberRepository(store, log)
+    const service = new MemberSyncService(redis, store, openSearchService, log)
 
-  const dbConnection = await getDbConnection(DB_CONFIG())
-  const store = new DbStore(log, dbConnection)
+    // Fetch all members with git identities
+    const allMembers = await repo.getMembersWithGitIdentities()
 
-  const repo = new MemberRepository(store, log)
-  const service = new MemberSyncService(redis, store, openSearchService, log)
+    if (allMembers.length === 0) {
+      log.warn('No members with git identities found')
+      process.exit(1)
+    }
 
-  const results = await repo.getMembersWithGitIdentities()
+    log.info(`Found ${allMembers.length} members with git identities. Starting batch processing.`)
 
-  if (results.length === 0) {
-    log.error(`No members with git identities found!`)
-    process.exit(1)
-  } else {
-    log.info(`Found ${results.length} members with git identities! Triggering sync!`)
-    await service.syncMembers(results)
+    // Process members in batches
+    for (let i = 0; i < allMembers.length; i += BATCH_SIZE) {
+      const batch = allMembers.slice(i, i + BATCH_SIZE)
+      await syncBatch(service, batch)
+      log.info(
+        `Processed ${Math.min(i + BATCH_SIZE, allMembers.length)} out of ${
+          allMembers.length
+        } members`,
+      )
+    }
+
+    log.info(`Finished processing a total of ${allMembers.length} members`)
     process.exit(0)
+  } catch (error) {
+    log.error(`Git members sync failed: ${error.message}`)
+    process.exit(1)
   }
 })
