@@ -21,6 +21,7 @@ import {
 } from '@crowd/integrations'
 import { RedisCache } from '@crowd/redis'
 import { findMemberById, MemberField } from '@crowd/data-access-layer/src/members'
+import { QueryTypes } from 'sequelize'
 import { encryptData } from '../utils/crypto'
 import { ILinkedInOrganization } from '../serverless/integrations/types/linkedinTypes'
 import { DISCORD_CONFIG, GITHUB_CONFIG, IS_TEST_ENV, KUBE_MODE, NANGO_CONFIG } from '../conf/index'
@@ -411,23 +412,37 @@ export default class IntegrationService {
     let integration
     const transaction = await SequelizeRepository.createTransaction(this.options)
 
-    this.options.log.error(repos.length)
+    this.options.log.info(`Total repos to insert: ${repos.length}`)
 
     try {
-      // First, create or update the integration without the repos data
       integration = await this.createOrUpdate(integrationData, transaction)
-
       await SequelizeRepository.commitTransaction(transaction)
     } catch (err) {
       await SequelizeRepository.rollbackTransaction(transaction)
       throw err
     }
 
-    // Then, update the repos data in chunks to avoid query timeout
-    const chunkSize = 100 // Adjust this value based on your specific needs
+    const chunkSize = 100
+    let insertedRepos = 0
+
     for (let i = 0; i < repos.length; i += chunkSize) {
       const reposChunk = repos.slice(i, i + chunkSize)
-      await this.upsertGitHubRepos(integration.id, reposChunk)
+      try {
+        await this.upsertGitHubRepos(integration.id, reposChunk)
+        insertedRepos += reposChunk.length
+        this.options.log.info(`Inserted ${insertedRepos} out of ${repos.length} repos`)
+      } catch (error) {
+        this.options.log.error(`Error inserting chunk ${i / chunkSize + 1}: ${error.message}`)
+      }
+    }
+
+    const finalReposCount = await this.getGitHubReposCount(integration.id)
+    this.options.log.info(`Final repos count: ${finalReposCount}`)
+
+    if (finalReposCount !== repos.length) {
+      this.options.log.warn(
+        `Mismatch in repos count. Expected: ${repos.length}, Actual: ${finalReposCount}`,
+      )
     }
 
     return integration
@@ -446,20 +461,52 @@ export default class IntegrationService {
           COALESCE(settings->'repos', '[]'::jsonb) || ?::jsonb
         )
         WHERE id = ?
+        RETURNING (settings->'repos')::jsonb AS updated_repos
       `
 
       const values = [JSON.stringify(repos), integrationId]
 
-      await sequelize.query(query, {
+      const [result] = await sequelize.query(query, {
         replacements: values,
         transaction,
+        type: QueryTypes.SELECT,
       })
 
+      // Commit the transaction before checking the result
       await SequelizeRepository.commitTransaction(transaction)
+
+      const updatedReposCount = (result as any)?.updated_repos?.length ?? 0
+
+      if (updatedReposCount !== repos.length) {
+        this.options.log.warn(
+          `Mismatch in upserted repos count. Expected: ${repos.length}, Actual: ${updatedReposCount}`,
+        )
+      }
+
+      // Double-check the count after committing the transaction
+      const finalCount = await this.getGitHubReposCount(integrationId)
+      this.options.log.info(`Final count after upsert: ${finalCount}`)
+
+      return updatedReposCount
     } catch (error) {
       await SequelizeRepository.rollbackTransaction(transaction)
       throw error
     }
+  }
+
+  private async getGitHubReposCount(integrationId) {
+    const sequelize = SequelizeRepository.getSequelize(this.options)
+    const query = `
+      SELECT jsonb_array_length(settings->'repos') AS repos_count
+      FROM integrations
+      WHERE id = ?
+    `
+    const [result] = await sequelize.query(query, {
+      replacements: [integrationId],
+      type: QueryTypes.SELECT,
+    })
+
+    return (result as any)?.repos_count ?? 0
   }
 
   static extractOwner(repos, options) {
