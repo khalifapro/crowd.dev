@@ -5,7 +5,7 @@ import { getServiceLogger } from '@crowd/logging'
 import { OpenSearchService, OrganizationSyncService } from '@crowd/opensearch'
 import { IndexedEntityType } from '@crowd/opensearch/src/repo/indexing.data'
 import { IndexingRepository } from '@crowd/opensearch/src/repo/indexing.repo'
-import { OPENSEARCH_CONFIG } from '../conf'
+import { DB_CONFIG, OPENSEARCH_CONFIG } from '../conf'
 
 const log = getServiceLogger()
 
@@ -16,35 +16,18 @@ const MAX_CONCURRENT = 3
 setImmediate(async () => {
   const openSearchService = new OpenSearchService(log, OPENSEARCH_CONFIG())
 
-  const writeHost = await getDbConnection({
-    host: process.env.CROWD_DB_WRITE_HOST,
-    port: parseInt(process.env.CROWD_DB_PORT),
-    database: process.env.CROWD_DB_DATABASE,
-    user: process.env.CROWD_DB_USERNAME,
-    password: process.env.CROWD_DB_PASSWORD,
-  })
-
-  const writeStore = new DbStore(log, writeHost)
-
-  const readHost = await getDbConnection({
-    host: process.env.CROWD_DB_READ_HOST,
-    port: parseInt(process.env.CROWD_DB_PORT),
-    database: process.env.CROWD_DB_DATABASE,
-    user: process.env.CROWD_DB_USERNAME,
-    password: process.env.CROWD_DB_PASSWORD,
-  })
+  const dbConnection = await getDbConnection(DB_CONFIG())
+  const store = new DbStore(log, dbConnection)
 
   if (processArguments.includes('--clean')) {
-    const indexingRepo = new IndexingRepository(writeStore, log)
+    const indexingRepo = new IndexingRepository(store, log)
     await indexingRepo.deleteIndexedEntities(IndexedEntityType.ORGANIZATION)
   }
 
-  const readStore = new DbStore(log, readHost)
-  const repo = new OrganizationRepository(readStore, log)
-
+  const repo = new OrganizationRepository(store, log)
   const tenantIds = await repo.getTenantIds()
 
-  const service = new OrganizationSyncService(writeStore, openSearchService, log, readStore)
+  const service = new OrganizationSyncService(store, openSearchService, log)
 
   let current = 0
   for (let i = 0; i < tenantIds.length; i++) {
